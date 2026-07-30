@@ -8,13 +8,20 @@ import EnvironmentChart from "./components/EnvironmentChart";
 import HistoryTable from "./components/HistoryTable";
 import NotificationListener from "./components/NotificationListener";
 import RelayControl from "./components/RelayControl";
+import Clock from "./components/Clock";
 
 function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800">🌊 Dashboard EWS Banjir</h1>
-        <p className="text-gray-500">Monitoring multi-parameter realtime</p>
+      {/* Header dengan jam di kanan */}
+      <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800">🌊 Dashboard EWS Banjir</h1>
+          <p className="text-gray-500">Monitoring multi-parameter realtime</p>
+        </div>
+        <div className="mt-4 sm:mt-0">
+          <Clock />
+        </div>
       </header>
 
       <div className="mb-8">
@@ -34,7 +41,7 @@ function Dashboard() {
           <HistoryTable />
         </div>
         <div className="lg:col-span-2">
-          {/* Bisa tambahkan widget lain */}
+          {/* Widget tambahan bisa diletakkan di sini */}
         </div>
       </div>
     </div>
