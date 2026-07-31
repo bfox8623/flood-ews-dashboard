@@ -1,60 +1,90 @@
-import Paho from 'paho-mqtt';
-
-const brokerUrl = 'd6e43354d203418ab452c2ef94e9ed66.s1.eu.hivemq.cloud';
-const port = 8884; // WebSocket port
-const clientId = 'dashboard_' + Math.random().toString(16).substr(2, 8);
-
-const options = {
-  userName: 'dashboard',
-  password: '12345678',
-  useSSL: true,
-  onSuccess: () => {
-    console.log('MQTT (dashboard) connected');
-  },
-  onFailure: (err) => {
-    console.error('MQTT connection failed:', err.errorMessage);
-  },
-};
+import { Client, Message } from 'paho-mqtt';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from './firebase';
 
 let client = null;
+let isConnected = false;
 
-export function connectMQTT() {
-  if (client && client.isConnected()) return client;
+const brokerUrl = import.meta.env.VITE_MQTT_BROKER || 'wss://broker.hivemq.com:8884/mqtt';
+const username = import.meta.env.VITE_MQTT_USERNAME || '';
+const password = import.meta.env.VITE_MQTT_PASSWORD || '';
+const clientId = 'web_' + Math.random().toString(16).substring(2, 10);
 
-  client = new Paho.Client(brokerUrl, port, clientId);
-  client.onConnectionLost = (responseObject) => {
-    console.warn('MQTT connection lost:', responseObject.errorMessage);
-  };
+export const connectMqtt = () => {
+  if (client && isConnected) return client;
 
-  client.connect({
-    ...options,
-    onSuccess: options.onSuccess,
-    onFailure: options.onFailure,
-  });
+  try {
+    const url = new URL(brokerUrl);
+    const host = url.hostname;
+    const port = url.port || (url.protocol === 'wss:' ? 8884 : 8080);
+    const useSSL = url.protocol === 'wss:';
+
+    client = new Client(host, Number(port), clientId);
+
+    client.onConnectionLost = (responseObject) => {
+      isConnected = false;
+      console.warn('MQTT connection lost:', responseObject.errorMessage);
+    };
+
+    client.onMessageArrived = (message) => {
+      console.log('MQTT message arrived:', message.payloadString);
+    };
+
+    client.connect({
+      onSuccess: () => {
+        isConnected = true;
+        console.log('✅ MQTT connected to', brokerUrl);
+      },
+      onFailure: (err) => {
+        console.error('❌ MQTT connection failed:', err.errorMessage);
+        isConnected = false;
+      },
+      useSSL,
+      userName: username,
+      password: password,
+      keepAliveInterval: 60,
+      cleanSession: true,
+    });
+  } catch (e) {
+    console.error('Error creating MQTT client:', e);
+  }
 
   return client;
-}
+};
 
-export function publishRelay(relay3, relay4) {
-  const mqttClient = connectMQTT();
-  const payload = JSON.stringify({ relay3, relay4 });
-  const message = new Paho.Message(payload);
-  message.destinationName = 'ews/relay';
-  message.qos = 0;
-
-  // Pastikan client terhubung sebelum publish
-  if (mqttClient.isConnected()) {
-    mqttClient.send(message);
-    console.log('Published to MQTT:', payload);
-  } else {
-    // Tunggu hingga connect lalu kirim
-    mqttClient.connect({
-      ...options,
-      onSuccess: () => {
-        mqttClient.send(message);
-        console.log('Published to MQTT (after connect):', payload);
-      },
-      onFailure: options.onFailure,
-    });
+// Fungsi utama: kirim ke MQTT jika terhubung, dan selalu simpan ke Firestore
+export const publishAllRelays = async (relay1, relay2, relay3, relay4) => {
+  // 1. Kirim via MQTT jika terhubung
+  try {
+    if (client && isConnected) {
+      const message = new Message(JSON.stringify({ relay1, relay2, relay3, relay4 }));
+      message.destinationName = 'ews/relay';
+      message.qos = 1;
+      client.send(message);
+      console.log('📤 Published to MQTT:', { relay1, relay2, relay3, relay4 });
+    } else {
+      console.warn('⚠️ MQTT not connected, skip publishing');
+    }
+  } catch (err) {
+    console.error('❌ MQTT publish error:', err);
   }
-}
+
+  // 2. Selalu simpan ke Firestore (backup)
+  try {
+    await setDoc(doc(db, 'commands', 'relay'), {
+      relay1,
+      relay2,
+      relay3,
+      relay4,
+      updatedAt: new Date().toISOString(),
+    });
+    console.log('📁 Firestore updated:', { relay1, relay2, relay3, relay4 });
+  } catch (err) {
+    console.error('❌ Firestore update error:', err);
+  }
+};
+
+// Fungsi lama (2 relay) – untuk kompatibilitas
+export const publishRelay = (relay3, relay4) => {
+  publishAllRelays(false, false, relay3, relay4);
+};

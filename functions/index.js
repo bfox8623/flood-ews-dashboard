@@ -57,11 +57,13 @@ exports.relayControl = functions.firestore.document("commands/relay")
     if (!data) return;
 
     const message = {
+      relay1: data.relay1 || false,
+      relay2: data.relay2 || false,
       relay3: data.relay3 || false,
       relay4: data.relay4 || false,
     };
     client.publish("ews/relay", JSON.stringify(message));
-    console.log("Published relay command:", message);
+    console.log("Published relay command (4 relays):", message);
   });
 
 exports.manualUpdate = functions.https.onRequest((req, res) => {

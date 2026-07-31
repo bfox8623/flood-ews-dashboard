@@ -4,7 +4,6 @@ import { db } from "../services/firebase";
 import { getStatus } from "../utils/thresholds";
 
 const DataContext = createContext();
-
 export const useData = () => useContext(DataContext);
 
 export const DataProvider = ({ children }) => {
@@ -12,56 +11,90 @@ export const DataProvider = ({ children }) => {
   const [history, setHistory] = useState([]);
   const [thresholds, setThresholds] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Fetch thresholds sekali
+  // Ambil thresholds
   useEffect(() => {
-    (async () => {
-      const snap = await getDoc(doc(db, "settings", "thresholds"));
-      if (snap.exists()) {
-        setThresholds(snap.data());
-        console.log("Thresholds loaded:", snap.data());
-      } else {
-        console.warn("Thresholds document not found!");
+    const loadThresholds = async () => {
+      try {
+        const snap = await getDoc(doc(db, "settings", "thresholds"));
+        if (snap.exists()) {
+          setThresholds(snap.data());
+          console.log("✅ Thresholds loaded:", snap.data());
+        } else {
+          console.warn("⚠️ Thresholds not found, using defaults.");
+          setThresholds({ water_max_aman: 30, water_max_siaga: 50 });
+        }
+      } catch (e) {
+        console.error("❌ Error loading thresholds:", e);
+        setThresholds({ water_max_aman: 30, water_max_siaga: 50 });
       }
-    })();
+    };
+    loadThresholds();
   }, []);
 
-  // Realtime current
+  // Realtime current (tanpa dummy)
   useEffect(() => {
-    console.log("Listening to realtime/current...");
-    const unsub = onSnapshot(doc(db, "realtime", "current"), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = { id: docSnap.id, ...docSnap.data() };
-        console.log("Current data:", data);
-        setCurrent(data);
-      } else {
-        console.warn("Document realtime/current does not exist!");
-      }
-      setLoading(false);
-    }, (error) => {
-      console.error("Error listening to realtime/current:", error);
-      setLoading(false);
-    });
-    return () => unsub();
+    let unsub = () => {};
+
+    const setupListener = () => {
+      console.log("🔍 Setting up listener for realtime/current...");
+      unsub = onSnapshot(
+        doc(db, "realtime", "current"),
+        (docSnap) => {
+          console.log("📡 Snapshot received.");
+          if (docSnap.exists()) {
+            const data = { id: docSnap.id, ...docSnap.data() };
+            console.log("✅ Current data:", data);
+            setCurrent(data);
+            setError(null);
+          } else {
+            console.warn("⚠️ Document realtime/current does not exist.");
+            setCurrent(null);
+            setError("Dokumen current tidak ditemukan di Firebase.");
+          }
+          setLoading(false);
+        },
+        (err) => {
+          console.error("❌ Listener error:", err);
+          setError(err.message);
+          setCurrent(null);
+          setLoading(false);
+        }
+      );
+    };
+
+    setupListener();
+
+    return () => {
+      if (unsub) unsub();
+    };
   }, []);
 
-  // History (last 100)
+  // History (tanpa dummy)
   useEffect(() => {
     const q = query(collection(db, "history"), orderBy("timestamp", "desc"), limit(100));
-    const unsub = onSnapshot(q, (snapshot) => {
-      const hist = [];
-      snapshot.forEach((d) => hist.push({ id: d.id, ...d.data() }));
-      hist.reverse(); // chronological
-      console.log("History data count:", hist.length);
-      setHistory(hist);
-    });
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        const hist = [];
+        snapshot.forEach((d) => hist.push({ id: d.id, ...d.data() }));
+        hist.reverse();
+        console.log("📜 History data count:", hist.length);
+        setHistory(hist);
+      },
+      (err) => {
+        console.error("❌ Error loading history:", err);
+        setHistory([]);
+      }
+    );
     return () => unsub();
   }, []);
 
   const getStatusFn = useCallback((level) => getStatus(level, thresholds), [thresholds]);
 
   return (
-    <DataContext.Provider value={{ current, history, thresholds, loading, getStatus: getStatusFn }}>
+    <DataContext.Provider value={{ current, history, thresholds, loading, error, getStatus: getStatusFn }}>
       {children}
     </DataContext.Provider>
   );
