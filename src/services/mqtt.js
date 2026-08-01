@@ -52,15 +52,15 @@ export const connectMqtt = () => {
   return client;
 };
 
-// Fungsi utama: kirim ke MQTT jika terhubung, dan selalu simpan ke Firestore
 export const publishAllRelays = async (relay1, relay2, relay3, relay4) => {
-  // 1. Kirim via MQTT jika terhubung
+  // 1. Kirim via MQTT
   try {
-    if (client && isConnected) {
+    const c = connectMqtt();
+    if (isConnected) {
       const message = new Message(JSON.stringify({ relay1, relay2, relay3, relay4 }));
       message.destinationName = 'ews/relay';
       message.qos = 1;
-      client.send(message);
+      c.send(message);
       console.log('📤 Published to MQTT:', { relay1, relay2, relay3, relay4 });
     } else {
       console.warn('⚠️ MQTT not connected, skip publishing');
@@ -84,7 +84,6 @@ export const publishAllRelays = async (relay1, relay2, relay3, relay4) => {
   }
 };
 
-// Fungsi lama (2 relay) – untuk kompatibilitas
 export const publishRelay = (relay3, relay4) => {
   publishAllRelays(false, false, relay3, relay4);
 };
