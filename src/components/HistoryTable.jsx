@@ -21,26 +21,24 @@ export default function HistoryTable() {
           <tr className="border-b text-left">
             <th className="py-1 pr-2">Waktu</th>
             <th className="py-1 pr-2">Air (cm)</th>
-            <th className="py-1 pr-2">Keberadaan</th>
+            <th className="py-1 pr-2">Keberadaan Air</th>
             <th className="py-1 pr-2">Hujan</th>
-            <th className="py-1 pr-2">Suhu (°C)</th>
-            <th className="py-1">Kelembaban (%)</th>
+            <th className="py-1">Suhu (°C)</th>
           </tr>
         </thead>
         <tbody>
           {last10.length === 0 ? (
             <tr>
-              <td colSpan={6} className="py-4 text-center text-gray-400">Belum ada data</td>
+              <td colSpan={5} className="py-4 text-center text-gray-400">Belum ada data</td>
             </tr>
           ) : (
             last10.map((item) => (
               <tr key={item.id} className="border-b last:border-0">
                 <td className="py-1 pr-2 whitespace-nowrap">{formatTime(item.timestamp)}</td>
-                <td className="py-1 pr-2">{item.water_level.toFixed(1)}</td>
+                <td className="py-1 pr-2">{item.water_level !== undefined ? item.water_level.toFixed(1) : '-'}</td>
                 <td className="py-1 pr-2">{item.water_presence ? "Ada" : "Tidak"}</td>
                 <td className="py-1 pr-2">{item.rain_detected ? "Hujan" : "Tidak"}</td>
-                <td className="py-1 pr-2">{item.temperature.toFixed(1)}</td>
-                <td className="py-1">{item.humidity.toFixed(1)}</td>
+                <td className="py-1">{item.temperature !== undefined ? item.temperature.toFixed(1) : '-'}</td>
               </tr>
             ))
           )}

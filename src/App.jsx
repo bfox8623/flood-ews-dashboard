@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { DataProvider, useData } from './context/DataContext';
 import NotificationListener from './components/NotificationListener';
-import { publishAllRelays, connectMqtt } from './services/mqtt';
+import { publishAllRelays, connectMqtt, syncESP32Time } from './services/mqtt';
 import { getCombinedStatus } from './utils/thresholds';
 import { auth } from './services/firebase';
 import {
@@ -30,6 +30,7 @@ import WaterLevelChart from './components/WaterLevelChart';
 import WaterPresenceChart from './components/WaterPresenceChart';
 import RainChart from './components/RainChart';
 import EnvironmentChart from './components/EnvironmentChart';
+import Clock from './components/Clock';
 
 ChartJS.register(
   CategoryScale,
@@ -91,30 +92,24 @@ function LoginPage({ onLogin }) {
 }
 
 // ============================================
-// 2. DASHBOARD PAGE (tanpa dummy)
+// 2. DASHBOARD PAGE (tanpa humidity)
 // ============================================
 function DashboardPage() {
   const { current, history, loading, error, thresholds, getStatus } = useData();
   const [chartTab, setChartTab] = useState(0);
 
-  // State relay (4 relay)
   const [relay1, setRelay1] = useState(false);
   const [relay2, setRelay2] = useState(false);
   const [relay3, setRelay3] = useState(false);
   const [relay4, setRelay4] = useState(false);
 
-  // Mode: 'auto' atau 'manual'
   const [mode, setMode] = useState('auto');
-
-  // Status gabungan
   const [combinedStatus, setCombinedStatus] = useState({ label: 'Aman', color: 'green', level: 1 });
 
-  // Inisialisasi koneksi MQTT
   useEffect(() => {
     connectMqtt();
   }, []);
 
-  // Effect untuk auto-relay
   useEffect(() => {
     if (mode !== 'auto' || !current) return;
 
@@ -122,7 +117,6 @@ function DashboardPage() {
       water_level: current.water_level || 0,
       water_presence: current.water_presence || false,
       temperature: current.temperature || 0,
-      humidity: current.humidity || 0,
       rain_detected: current.rain_detected || false,
     };
     const status = getCombinedStatus(data, thresholds);
@@ -157,12 +151,14 @@ function DashboardPage() {
     }
   };
 
-  // Loading
+  const handleSyncTime = () => {
+    syncESP32Time();
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center h-64"><p className="text-gray-500">Memuat data...</p></div>;
   }
 
-  // Error atau data kosong
   if (error || !current) {
     return (
       <div className="flex items-center justify-center h-64 flex-col">
@@ -174,7 +170,6 @@ function DashboardPage() {
   }
 
   const waterLevel = current.water_level || 0;
-  const humidity = current.humidity || 0;
   const temperature = current.temperature || 0;
   const status = getStatus(waterLevel);
   const statusLabel = status?.label || 'Aman';
@@ -186,21 +181,37 @@ function DashboardPage() {
     return ts.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
   });
   const waterHistory = historyData.map(d => d.water_level || 0);
-  const humidityHistory = historyData.map(d => d.humidity || 0);
   const tempHistory = historyData.map(d => d.temperature || 0);
 
-  // Jika history kosong, tetap tampilkan grafik kosong (tapi kita beri placeholder)
   const finalLabels = labels.length > 0 ? labels : ['Tidak ada data'];
   const finalWater = waterHistory.length > 0 ? waterHistory : [0];
-  const finalHumidity = humidityHistory.length > 0 ? humidityHistory : [0];
   const finalTemp = tempHistory.length > 0 ? tempHistory : [0];
 
   const chartData = {
     labels: finalLabels,
     datasets: [
-      { label: 'Tinggi Air (cm)', data: finalWater, borderColor: '#0077be', backgroundColor: 'rgba(0,119,190,0.05)', fill: true, tension: 0.4, pointRadius: 3, borderWidth: 2, hidden: chartTab !== 0 },
-      { label: 'Kelembapan (%RH)', data: finalHumidity, borderColor: '#2ecc71', backgroundColor: 'rgba(46,204,113,0.05)', fill: true, tension: 0.4, pointRadius: 3, borderWidth: 2, hidden: chartTab !== 1 },
-      { label: 'Suhu (°C)', data: finalTemp, borderColor: '#f39c12', backgroundColor: 'rgba(243,156,18,0.05)', fill: true, tension: 0.4, pointRadius: 3, borderWidth: 2, hidden: chartTab !== 2 },
+      {
+        label: 'Tinggi Air (cm)',
+        data: finalWater,
+        borderColor: '#0077be',
+        backgroundColor: 'rgba(0,119,190,0.05)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        borderWidth: 2,
+        hidden: chartTab !== 0,
+      },
+      {
+        label: 'Suhu (°C)',
+        data: finalTemp,
+        borderColor: '#f39c12',
+        backgroundColor: 'rgba(243,156,18,0.05)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        borderWidth: 2,
+        hidden: chartTab !== 1,
+      },
     ],
   };
 
@@ -220,8 +231,18 @@ function DashboardPage() {
 
   return (
     <>
-      <h2>Ringkasan Kondisi Saat Ini</h2>
-      <p className="subtitle">Pantau kondisi lingkungan dan perangkat secara real-time</p>
+      <div className="dashboard-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+        <div>
+          <h2>Ringkasan Kondisi Saat Ini</h2>
+          <p className="subtitle">Pantau kondisi lingkungan dan perangkat secara real-time</p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <Clock />
+          <button onClick={handleSyncTime} className="sync-btn" title="Sinkronkan waktu ke ESP32">
+            <i className="fas fa-sync-alt"></i> Sync
+          </button>
+        </div>
+      </div>
 
       <div className="card-grid">
         <div className="card">
@@ -229,12 +250,6 @@ function DashboardPage() {
           <div className="value">{waterLevel.toFixed(1)} <small style={{ fontSize: '18px', fontWeight: 500 }}>cm</small></div>
           <span className={`status ${statusClass}`}>{statusLabel}</span>
           <div className="range">Rentang Aman: 0 - 100 cm</div>
-        </div>
-        <div className="card">
-          <div className="label"><span>Kelembapan Udara</span><div className="icon-bg"><i className="fas fa-droplet"></i></div></div>
-          <div className="value">{humidity.toFixed(1)} <small style={{ fontSize: '18px', fontWeight: 500 }}>%RH</small></div>
-          <span className="status normal">Normal</span>
-          <div className="range">Rentang Normal: 40 - 80 %RH</div>
         </div>
         <div className="card">
           <div className="label"><span>Status Gabungan</span><div className="icon-bg"><i className="fas fa-shield-alt"></i></div></div>
@@ -248,6 +263,14 @@ function DashboardPage() {
           <span className={`status ${current.rain_detected ? 'warning' : 'normal'}`}>{current.rain_detected ? 'Hujan' : 'Cerah'}</span>
           <div className="range">Status: {current.rain_detected ? 'Hujan terdeteksi' : 'Tidak hujan'}</div>
         </div>
+        <div className="card">
+          <div className="label"><span>Suhu Udara</span><div className="icon-bg"><i className="fas fa-thermometer-half"></i></div></div>
+          <div className="value">{temperature.toFixed(1)} <small style={{ fontSize: '18px', fontWeight: 500 }}>°C</small></div>
+          <span className={`status ${temperature > 35 ? 'danger' : temperature < 20 ? 'warning' : 'normal'}`}>
+            {temperature > 35 ? 'Panas' : temperature < 20 ? 'Dingin' : 'Normal'}
+          </span>
+          <div className="range">Rentang Normal: 20 - 35 °C</div>
+        </div>
       </div>
 
       <div className="row-2">
@@ -255,16 +278,17 @@ function DashboardPage() {
           <h4><i className="fas fa-chart-bar" style={{ marginRight: 8, color: '#0077be' }}></i> Grafik Historis</h4>
           <div className="chart-tabs">
             <span className={chartTab === 0 ? 'active' : ''} onClick={() => setChartTab(0)}>Tinggi Air (cm)</span>
-            <span className={chartTab === 1 ? 'active' : ''} onClick={() => setChartTab(1)}>Kelembapan (%RH)</span>
-            <span className={chartTab === 2 ? 'active' : ''} onClick={() => setChartTab(2)}>Suhu (°C)</span>
+            <span className={chartTab === 1 ? 'active' : ''} onClick={() => setChartTab(1)}>Suhu (°C)</span>
           </div>
           <Line data={chartData} options={chartOptions} height={100} />
         </div>
+
         <div className="device-status">
           <h4><i className="fas fa-server" style={{ marginRight: 8, color: '#0077be' }}></i> Status Perangkat</h4>
           <div className="device-item"><span>Sensor Ultrasonik (Tinggi Air)</span> <span className="badge">Online</span></div>
-          <div className="device-item"><span>Sensor DHT22 (Kelembapan)</span> <span className="badge">Online</span></div>
+          <div className="device-item"><span>Sensor DS18B20 (Suhu)</span> <span className="badge">Online</span></div>
           <div className="device-item"><span>Sensor Hujan</span> <span className="badge">Online</span></div>
+          <div className="device-item"><span>Water Presence (Trigger)</span> <span className="badge">{current.water_presence ? 'ON' : 'OFF'}</span></div>
           <div className="device-item"><span>Relay 1 (Aman)</span> <span className={`badge ${relay1 ? '' : 'off'}`}>{relay1 ? 'ON' : 'OFF'}</span></div>
           <div className="device-item"><span>Relay 2 (Siaga)</span> <span className={`badge ${relay2 ? '' : 'off'}`}>{relay2 ? 'ON' : 'OFF'}</span></div>
           <div className="device-item"><span>Relay 3 & 4 (Bahaya)</span> <span className={`badge ${(relay3 || relay4) ? '' : 'off'}`}>{relay3 && relay4 ? 'ON' : 'OFF'}</span></div>
@@ -278,11 +302,11 @@ function DashboardPage() {
           <div className="notif-item"><div className="dot green"></div><div><span className="text"><strong>Tinggi air normal</strong></span><div className="time">Tinggi air: {waterLevel.toFixed(1)} cm</div></div></div>
           <div className="notif-item"><div className="dot" style={{ background: '#f5a623' }}></div><div><span className="text"><strong>Status gabungan</strong></span><div className="time">Status: {combinedStatus.label}</div></div></div>
         </div>
+
         <div className="env-box">
           <h4><i className="fas fa-leaf" style={{ marginRight: 8, color: '#0077be' }}></i> Informasi Lingkungan</h4>
           <div className="env-item"><span className="label-env">Suhu Udara</span> <span className="value-env">{temperature.toFixed(1)} °C</span></div>
           <div className="env-item"><span className="label-env">Tekanan Udara</span> <span className="value-env">1008 hPa</span></div>
-          <div className="env-item"><span className="label-env">Kelembapan Udara</span> <span className="value-env">{humidity.toFixed(1)} %RH</span></div>
           <div className="env-item"><span className="label-env">Kualitas Udara (AQI)</span> <span className="value-env">42 Baik</span></div>
         </div>
 
@@ -376,8 +400,9 @@ function DevicePage() {
       <p className="subtitle">Daftar perangkat dan statusnya</p>
       <div className="device-status" style={{ width: '100%' }}>
         <div className="device-item"><span>Sensor Ultrasonik (Tinggi Air)</span> <span className="badge">Online</span></div>
-        <div className="device-item"><span>Sensor DHT22 (Kelembapan)</span> <span className="badge">Online</span></div>
+        <div className="device-item"><span>Sensor DS18B20 (Suhu)</span> <span className="badge">Online</span></div>
         <div className="device-item"><span>Sensor Hujan</span> <span className="badge">Online</span></div>
+        <div className="device-item"><span>Water Presence (Trigger)</span> <span className="badge">Online</span></div>
         <div className="device-item"><span>Relay 1 (Aman)</span> <span className="badge">ON</span></div>
         <div className="device-item"><span>Relay 2 (Siaga)</span> <span className="badge off">OFF</span></div>
         <div className="device-item"><span>Relay 3 & 4 (Bahaya)</span> <span className="badge off">OFF</span></div>

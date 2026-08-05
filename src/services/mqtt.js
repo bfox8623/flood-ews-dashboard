@@ -34,6 +34,10 @@ export const connectMqtt = () => {
       onSuccess: () => {
         isConnected = true;
         console.log('✅ MQTT connected to', brokerUrl);
+        // Sinkronisasi otomatis saat koneksi berhasil
+        setTimeout(() => {
+          syncESP32Time();
+        }, 1000);
       },
       onFailure: (err) => {
         console.error('❌ MQTT connection failed:', err.errorMessage);
@@ -53,7 +57,6 @@ export const connectMqtt = () => {
 };
 
 export const publishAllRelays = async (relay1, relay2, relay3, relay4) => {
-  // 1. Kirim via MQTT
   try {
     const c = connectMqtt();
     if (isConnected) {
@@ -69,7 +72,6 @@ export const publishAllRelays = async (relay1, relay2, relay3, relay4) => {
     console.error('❌ MQTT publish error:', err);
   }
 
-  // 2. Selalu simpan ke Firestore (backup)
   try {
     await setDoc(doc(db, 'commands', 'relay'), {
       relay1,
@@ -81,6 +83,33 @@ export const publishAllRelays = async (relay1, relay2, relay3, relay4) => {
     console.log('📁 Firestore updated:', { relay1, relay2, relay3, relay4 });
   } catch (err) {
     console.error('❌ Firestore update error:', err);
+  }
+};
+
+export const syncESP32Time = async () => {
+  const now = new Date();
+  const timestamp = Math.floor(now.getTime() / 1000);
+
+  try {
+    const c = connectMqtt();
+    if (isConnected) {
+      const message = new Message(JSON.stringify({
+        action: 'sync_time',
+        timestamp: timestamp,
+        timezone: 'Asia/Jakarta'
+      }));
+      message.destinationName = 'ews/sync';
+      message.qos = 1;
+      c.send(message);
+      console.log('🔄 Sync time sent to ESP32:', timestamp);
+      return true;
+    } else {
+      console.warn('⚠️ MQTT not connected, cannot sync time');
+      return false;
+    }
+  } catch (err) {
+    console.error('❌ Sync time error:', err);
+    return false;
   }
 };
 
