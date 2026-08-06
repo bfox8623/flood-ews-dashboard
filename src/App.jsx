@@ -123,9 +123,16 @@ function DashboardPage() {
     setCombinedStatus(status);
 
     let r1 = false, r2 = false, r3 = false, r4 = false;
-    if (status.level === 1) { r1 = true; }
-    else if (status.level === 2) { r2 = true; }
-    else if (status.level === 3) { r3 = true; r4 = true; }
+    if (status.level === 1) { // Aman
+      r1 = true;
+    } else if (status.level === 2) { // Siaga
+      r2 = true;
+    } else if (status.level === 3) { // Bahaya (50-100cm)
+      r3 = true;
+    } else if (status.level === 4) { // Sangat Bahaya (<50cm)
+      r3 = true;
+      r4 = true;
+    }
     setRelay1(r1);
     setRelay2(r2);
     setRelay3(r3);

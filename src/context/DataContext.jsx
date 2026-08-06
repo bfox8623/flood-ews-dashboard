@@ -22,18 +22,18 @@ export const DataProvider = ({ children }) => {
           setThresholds(snap.data());
           console.log("✅ Thresholds loaded:", snap.data());
         } else {
-          console.warn("⚠️ Thresholds not found, using defaults.");
-          setThresholds({ water_max_aman: 30, water_max_siaga: 50 });
+          console.warn("⚠️ Thresholds not found, using defaults (Bahaya: <100cm, Siaga: <400cm, Aman: >=400cm)");
+          setThresholds({ water_max_aman: 400, water_max_siaga: 100 });
         }
       } catch (e) {
         console.error("❌ Error loading thresholds:", e);
-        setThresholds({ water_max_aman: 30, water_max_siaga: 50 });
+        setThresholds({ water_max_aman: 400, water_max_siaga: 100 });
       }
     };
     loadThresholds();
   }, []);
 
-  // Realtime current (tanpa dummy)
+  // Realtime current
   useEffect(() => {
     let unsub = () => {};
 
@@ -42,7 +42,7 @@ export const DataProvider = ({ children }) => {
       unsub = onSnapshot(
         doc(db, "realtime", "current"),
         (docSnap) => {
-          console.log("📡 Snapshot received.");
+          console.log("📡 Snapshot received for current.");
           if (docSnap.exists()) {
             const data = { id: docSnap.id, ...docSnap.data() };
             console.log("✅ Current data:", data);
@@ -56,7 +56,7 @@ export const DataProvider = ({ children }) => {
           setLoading(false);
         },
         (err) => {
-          console.error("❌ Listener error:", err);
+          console.error("❌ Listener error (current):", err);
           setError(err.message);
           setCurrent(null);
           setLoading(false);
@@ -71,20 +71,24 @@ export const DataProvider = ({ children }) => {
     };
   }, []);
 
-  // History (tanpa dummy)
+  // History (last 100)
   useEffect(() => {
+    console.log("🔍 Setting up listener for history...");
     const q = query(collection(db, "history"), orderBy("timestamp", "desc"), limit(100));
     const unsub = onSnapshot(
       q,
       (snapshot) => {
         const hist = [];
-        snapshot.forEach((d) => hist.push({ id: d.id, ...d.data() }));
-        hist.reverse();
-        console.log("📜 History data count:", hist.length);
+        snapshot.forEach((d) => {
+          const data = { id: d.id, ...d.data() };
+          hist.push(data);
+        });
+        hist.reverse(); // chronological order
+        console.log(`📜 History data count: ${hist.length}`);
         setHistory(hist);
       },
       (err) => {
-        console.error("❌ Error loading history:", err);
+        console.error("❌ Listener error (history):", err);
         setHistory([]);
       }
     );
