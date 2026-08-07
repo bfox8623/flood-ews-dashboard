@@ -22,12 +22,12 @@ export const DataProvider = ({ children }) => {
           setThresholds(snap.data());
           console.log("✅ Thresholds loaded:", snap.data());
         } else {
-          console.warn("⚠️ Thresholds not found, using defaults (Bahaya: <100cm, Siaga: <400cm, Aman: >=400cm)");
-          setThresholds({ water_max_aman: 400, water_max_siaga: 100 });
+          console.warn("⚠️ Thresholds not found, using defaults (Bahaya:<100cm, Waspada:100-200cm, Siaga:200-500cm, Aman:>500cm)");
+          setThresholds({ water_max_aman: 500, water_max_siaga: 200, water_max_waspada: 100 });
         }
       } catch (e) {
         console.error("❌ Error loading thresholds:", e);
-        setThresholds({ water_max_aman: 400, water_max_siaga: 100 });
+        setThresholds({ water_max_aman: 500, water_max_siaga: 200, water_max_waspada: 100 });
       }
     };
     loadThresholds();

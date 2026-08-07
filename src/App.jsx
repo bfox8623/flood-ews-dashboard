@@ -127,9 +127,9 @@ function DashboardPage() {
       r1 = true;
     } else if (status.level === 2) { // Siaga
       r2 = true;
-    } else if (status.level === 3) { // Bahaya (50-100cm)
+    } else if (status.level === 3) { // Waspada (50-100cm)
       r3 = true;
-    } else if (status.level === 4) { // Sangat Bahaya (<50cm)
+    } else if (status.level === 4) { // Bahaya (<50cm)
       r3 = true;
       r4 = true;
     }
